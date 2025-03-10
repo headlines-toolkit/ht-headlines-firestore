@@ -1,0 +1,22 @@
+name: ht_headlines_firestore
+description: Firestore implementation of the `ht_headlines_client` package, providing a concrete way to interact with headlines data stored in Firebase Firestore.
+version: 1.0.0
+publish_to: none
+repository: https://github.com/headlines_toolkit/ht-headlines-firestore
+environment:
+  sdk: ^3.7.0
+
+dependencies:
+  cloud_firestore: ^5.6.5
+  flutter:
+    sdk: flutter
+  ht_headlines_client:
+    git:
+      url: https://github.com/Headlines-Toolkit/ht-headlines-client.git
+      ref: main
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  mocktail: ^1.0.4
+  very_good_analysis: ^7.0.0
