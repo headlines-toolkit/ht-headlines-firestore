@@ -158,4 +158,4 @@ try {
 
 **Issues**
 
-If you encounter any issues or have suggestions, please file them on the [issue tracker](https://github.com/headlines_toolkit/ht-headlines-firestore).
+If you encounter any issues or have suggestions, please file them on the [issue tracker](https://github.com/headlines-toolkit/ht-headlines-firestore).
