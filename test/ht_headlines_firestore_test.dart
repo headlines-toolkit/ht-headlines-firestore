@@ -82,7 +82,6 @@ void main() {
       test('creates a headline successfully', () async {
         final publishedAt = DateTime.now();
         final headline = createHeadline(publishedAt: publishedAt);
-        final firestoreData = createFirestoreData(headline);
         final mockDocRef = MockDocumentReference();
 
         when(() => mockCollection.doc(headline.id)).thenReturn(mockDocRef);
@@ -403,7 +402,6 @@ void main() {
       test('updates a headline successfully', () async {
         final publishedAt = DateTime.now();
         final headline = createHeadline(publishedAt: publishedAt);
-        final firestoreData = createFirestoreData(headline);
         final mockDocRef = MockDocumentReference();
 
         when(() => mockCollection.doc(headline.id)).thenReturn(mockDocRef);
