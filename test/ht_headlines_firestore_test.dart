@@ -62,7 +62,7 @@ void main() {
       );
     }
 
-    // Helper function to create Firestore data as it would be stored 
+    // Helper function to create Firestore data as it would be stored
     // in Firestore.
     Map<String, dynamic> createExpectedFirestoreData(Headline headline) {
       final json = headline.toJson();
@@ -70,7 +70,7 @@ void main() {
       return json;
     }
 
-    // Helper function to create mock Firestore data as it would be 
+    // Helper function to create mock Firestore data as it would be
     // returned by doc.data().
     Map<String, dynamic> createMockFirestoreData(Headline headline) {
       final json = headline.toJson();
