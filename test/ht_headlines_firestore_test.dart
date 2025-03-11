@@ -62,19 +62,19 @@ void main() {
       );
     }
 
-    // Helper function to create Firestore data
-    Map<String, dynamic> createFirestoreData(Headline headline) {
-      final json = <String, dynamic>{};
-      json['id'] = headline.id;
-      json['title'] = headline.title;
-      json['description'] = headline.description;
-      json['url'] = headline.url;
-      json['imageUrl'] = headline.imageUrl;
+    // Helper function to create Firestore data as it would be stored 
+    // in Firestore.
+    Map<String, dynamic> createExpectedFirestoreData(Headline headline) {
+      final json = headline.toJson();
       json['publishedAt'] = Timestamp.fromDate(headline.publishedAt!);
-      json['source'] = headline.source;
-      json['categories'] = headline.categories;
-      json['eventCountry'] = headline.eventCountry;
+      return json;
+    }
 
+    // Helper function to create mock Firestore data as it would be 
+    // returned by doc.data().
+    Map<String, dynamic> createMockFirestoreData(Headline headline) {
+      final json = headline.toJson();
+      json['publishedAt'] = headline.publishedAt!.toIso8601String();
       return json;
     }
 
@@ -93,7 +93,9 @@ void main() {
 
         expect(result, equals(headline));
         verify(() => mockCollection.doc(headline.id)).called(1);
-        verify(() => mockDocRef.set(createFirestoreData(headline))).called(1);
+        verify(
+          () => mockDocRef.set(createExpectedFirestoreData(headline)),
+        ).called(1);
       });
 
       test('throws HeadlineCreateException on failure', () async {
@@ -143,7 +145,7 @@ void main() {
       test('returns a headline successfully', () async {
         final publishedAt = DateTime.now();
         final headline = createHeadline(publishedAt: publishedAt);
-        final firestoreData = createFirestoreData(headline);
+        final firestoreData = createMockFirestoreData(headline);
         final mockDocRef = MockDocumentReference();
         final mockDocSnap = MockDocumentSnapshot();
 
@@ -152,10 +154,9 @@ void main() {
         when(() => mockDocSnap.exists).thenReturn(true);
         when(mockDocSnap.data).thenReturn(firestoreData);
 
-        expect(
-          () => headlinesFirestore.getHeadline(id: headline.id),
-          throwsA(isA<HeadlinesFetchException>()),
-        );
+        final result = await headlinesFirestore.getHeadline(id: headline.id);
+
+        expect(result, equals(headline));
       });
 
       test('returns null if headline does not exist', () async {
@@ -193,8 +194,8 @@ void main() {
         final publishedAt2 = DateTime.now().add(const Duration(seconds: 1));
         final headline1 = createHeadline(id: 'id1', publishedAt: publishedAt1);
         final headline2 = createHeadline(id: 'id2', publishedAt: publishedAt2);
-        final firestoreData1 = createFirestoreData(headline1);
-        final firestoreData2 = createFirestoreData(headline2);
+        final firestoreData1 = createMockFirestoreData(headline1);
+        final firestoreData2 = createMockFirestoreData(headline2);
 
         final mockQuerySnap = MockQuerySnapshot();
         final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
@@ -214,10 +215,9 @@ void main() {
         when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
         when(mockQueryDocSnap2.data).thenReturn(firestoreData2);
 
-        expect(
-          () => headlinesFirestore.getHeadlines(limit: 2),
-          throwsA(isA<HeadlinesFetchException>()),
-        );
+        final result = await headlinesFirestore.getHeadlines(limit: 2);
+
+        expect(result, equals([headline1, headline2]));
       });
 
       test('returns headlines with category filter', () async {
@@ -227,7 +227,7 @@ void main() {
           categories: ['category1'],
           publishedAt: publishedAt,
         );
-        final firestoreData1 = createFirestoreData(headline1);
+        final firestoreData1 = createMockFirestoreData(headline1);
 
         final mockQuery = MockQuery();
         final mockQuerySnap = MockQuerySnapshot();
@@ -244,11 +244,12 @@ void main() {
         when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
         when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
 
-        expect(
-          () =>
-              headlinesFirestore.getHeadlines(limit: 2, category: 'category1'),
-          throwsA(isA<HeadlinesFetchException>()),
+        final result = await headlinesFirestore.getHeadlines(
+          limit: 2,
+          category: 'category1',
         );
+
+        expect(result, equals([headline1]));
       });
 
       test('returns headlines with source filter', () async {
@@ -258,7 +259,7 @@ void main() {
           source: 'source1',
           publishedAt: publishedAt,
         );
-        final firestoreData1 = createFirestoreData(headline1);
+        final firestoreData1 = createMockFirestoreData(headline1);
 
         final mockQuery = MockQuery();
         final mockQuerySnap = MockQuerySnapshot();
@@ -275,10 +276,11 @@ void main() {
         when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
         when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
 
-        expect(
-          () => headlinesFirestore.getHeadlines(limit: 2, source: 'source1'),
-          throwsA(isA<HeadlinesFetchException>()),
+        final result = await headlinesFirestore.getHeadlines(
+          limit: 2,
+          source: 'source1',
         );
+        expect(result, equals([headline1]));
       });
 
       test('returns headlines with eventCountry filter', () async {
@@ -288,7 +290,7 @@ void main() {
           eventCountry: 'country1',
           publishedAt: publishedAt,
         );
-        final firestoreData1 = createFirestoreData(headline1);
+        final firestoreData1 = createMockFirestoreData(headline1);
 
         final mockQuery = MockQuery();
         final mockQuerySnap = MockQuerySnapshot();
@@ -305,13 +307,296 @@ void main() {
         when(() => mockQuerySnap.docs).thenReturn([mockQueryDocumentSnapshot]);
         when(mockQueryDocumentSnapshot.data).thenReturn(firestoreData1);
 
-        expect(
-          () => headlinesFirestore.getHeadlines(
-            limit: 2,
-            eventCountry: 'country1',
-          ),
-          throwsA(isA<HeadlinesFetchException>()),
+        final result = await headlinesFirestore.getHeadlines(
+          limit: 2,
+          eventCountry: 'country1',
         );
+        expect(result, equals([headline1]));
+      });
+
+      test('returns headlines with category and source filter', () async {
+        final publishedAt = DateTime.now();
+        final headline1 = createHeadline(
+          id: 'id1',
+          categories: ['category1'],
+          source: 'source1',
+          publishedAt: publishedAt,
+        );
+        final firestoreData1 = createMockFirestoreData(headline1);
+
+        final mockQuery = MockQuery();
+        final mockQuerySnap = MockQuerySnapshot();
+        final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
+
+        when(
+          () => mockCollection.where('categories', arrayContains: 'category1'),
+        ).thenReturn(mockQuery);
+        when(
+          () => mockQuery.where('source', isEqualTo: 'source1'),
+        ).thenReturn(mockQuery);
+        when(
+          () => mockQuery.orderBy(any(), descending: any(named: 'descending')),
+        ).thenReturn(mockQuery);
+        when(() => mockQuery.limit(any())).thenReturn(mockQuery);
+        when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
+        when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
+        when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
+
+        final result = await headlinesFirestore.getHeadlines(
+          limit: 2,
+          category: 'category1',
+          source: 'source1',
+        );
+        expect(result, equals([headline1]));
+      });
+
+      test('returns headlines with category and eventCountry filter', () async {
+        final publishedAt = DateTime.now();
+        final headline1 = createHeadline(
+          id: 'id1',
+          categories: ['category1'],
+          eventCountry: 'country1',
+          publishedAt: publishedAt,
+        );
+        final firestoreData1 = createMockFirestoreData(headline1);
+
+        final mockQuery = MockQuery();
+        final mockQuerySnap = MockQuerySnapshot();
+        final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
+
+        when(
+          () => mockCollection.where('categories', arrayContains: 'category1'),
+        ).thenReturn(mockQuery);
+        when(
+          () => mockQuery.where('eventCountry', isEqualTo: 'country1'),
+        ).thenReturn(mockQuery);
+        when(
+          () => mockQuery.orderBy(any(), descending: any(named: 'descending')),
+        ).thenReturn(mockQuery);
+        when(() => mockQuery.limit(any())).thenReturn(mockQuery);
+        when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
+        when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
+        when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
+
+        final result = await headlinesFirestore.getHeadlines(
+          limit: 2,
+          category: 'category1',
+          eventCountry: 'country1',
+        );
+        expect(result, equals([headline1]));
+      });
+
+      test('returns headlines with source and eventCountry filter', () async {
+        final publishedAt = DateTime.now();
+        final headline1 = createHeadline(
+          id: 'id1',
+          source: 'source1',
+          eventCountry: 'country1',
+          publishedAt: publishedAt,
+        );
+        final firestoreData1 = createMockFirestoreData(headline1);
+
+        final mockQuery = MockQuery();
+        final mockQuerySnap = MockQuerySnapshot();
+        final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
+
+        when(
+          () => mockCollection.where('source', isEqualTo: 'source1'),
+        ).thenReturn(mockQuery);
+        when(
+          () => mockQuery.where('eventCountry', isEqualTo: 'country1'),
+        ).thenReturn(mockQuery);
+        when(
+          () => mockQuery.orderBy(any(), descending: any(named: 'descending')),
+        ).thenReturn(mockQuery);
+        when(() => mockQuery.limit(any())).thenReturn(mockQuery);
+        when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
+        when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
+        when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
+
+        final result = await headlinesFirestore.getHeadlines(
+          limit: 2,
+          source: 'source1',
+          eventCountry: 'country1',
+        );
+        expect(result, equals([headline1]));
+      });
+
+      test(
+        'returns headlines with category, source and eventCountry filter',
+        () async {
+          final publishedAt = DateTime.now();
+          final headline1 = createHeadline(
+            id: 'id1',
+            categories: ['category1'],
+            source: 'source1',
+            eventCountry: 'country1',
+            publishedAt: publishedAt,
+          );
+          final firestoreData1 = createMockFirestoreData(headline1);
+
+          final mockQuery = MockQuery();
+          final mockQuerySnap = MockQuerySnapshot();
+          final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
+
+          when(
+            () =>
+                mockCollection.where('categories', arrayContains: 'category1'),
+          ).thenReturn(mockQuery);
+          when(
+            () => mockQuery.where('source', isEqualTo: 'source1'),
+          ).thenReturn(mockQuery);
+          when(
+            () => mockQuery.where('eventCountry', isEqualTo: 'country1'),
+          ).thenReturn(mockQuery);
+          when(
+            () =>
+                mockQuery.orderBy(any(), descending: any(named: 'descending')),
+          ).thenReturn(mockQuery);
+          when(() => mockQuery.limit(any())).thenReturn(mockQuery);
+          when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
+          when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
+          when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
+
+          final result = await headlinesFirestore.getHeadlines(
+            limit: 2,
+            category: 'category1',
+            source: 'source1',
+            eventCountry: 'country1',
+          );
+          expect(result, equals([headline1]));
+        },
+      );
+
+      test('returns headlines with startAfterId', () async {
+        final publishedAt1 = DateTime.now();
+        final publishedAt2 = DateTime.now().add(const Duration(seconds: 1));
+        final headline1 = createHeadline(id: 'id1', publishedAt: publishedAt1);
+        final headline2 = createHeadline(id: 'id2', publishedAt: publishedAt2);
+        final firestoreData1 = createMockFirestoreData(headline1);
+        final firestoreData2 = createMockFirestoreData(headline2);
+
+        final mockQuerySnap = MockQuerySnapshot();
+        final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
+        final mockQueryDocSnap2 = MockQueryDocumentSnapshot();
+        final mockDocRef = MockDocumentReference();
+        final mockDocSnap = MockDocumentSnapshot();
+
+        when(
+          () => mockCollection.orderBy(
+            any(),
+            descending: any(named: 'descending'),
+          ),
+        ).thenReturn(mockCollection);
+        when(() => mockCollection.limit(any())).thenReturn(mockCollection);
+        when(() => mockCollection.doc('id1')).thenReturn(mockDocRef);
+        when(mockDocRef.get).thenAnswer((_) async => mockDocSnap);
+        when(() => mockDocSnap.exists).thenReturn(true);
+
+        when(
+          () => mockCollection.startAfterDocument(mockDocSnap),
+        ).thenReturn(mockCollection);
+        when(() => mockCollection.get()).thenAnswer((_) async => mockQuerySnap);
+        when(
+          () => mockQuerySnap.docs,
+        ).thenReturn([mockQueryDocSnap2]); // Only headline2 should be returned
+        when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
+        when(mockQueryDocSnap2.data).thenReturn(firestoreData2);
+
+        final result = await headlinesFirestore.getHeadlines(
+          limit: 2,
+          startAfterId: 'id1',
+        );
+        expect(result, equals([headline2]));
+      });
+
+      test('returns headlines with startAfterId and filters', () async {
+        final publishedAt1 = DateTime.now();
+        final publishedAt2 = DateTime.now().add(const Duration(seconds: 1));
+        final headline1 = createHeadline(
+          id: 'id1',
+          categories: ['category1'],
+          publishedAt: publishedAt1,
+        );
+        final headline2 = createHeadline(
+          id: 'id2',
+          categories: ['category1'],
+          publishedAt: publishedAt2,
+        );
+        final firestoreData1 = createMockFirestoreData(headline1);
+        final firestoreData2 = createMockFirestoreData(headline2);
+
+        final mockQuery = MockQuery();
+        final mockQuerySnap = MockQuerySnapshot();
+        final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
+        final mockQueryDocSnap2 = MockQueryDocumentSnapshot();
+        final mockDocRef = MockDocumentReference();
+        final mockDocSnap = MockDocumentSnapshot();
+
+        when(
+          () => mockCollection.where('categories', arrayContains: 'category1'),
+        ).thenReturn(mockQuery);
+        when(
+          () => mockQuery.orderBy(any(), descending: any(named: 'descending')),
+        ).thenReturn(mockQuery);
+        when(() => mockQuery.limit(any())).thenReturn(mockQuery);
+        when(() => mockCollection.doc('id1')).thenReturn(mockDocRef);
+        when(mockDocRef.get).thenAnswer((_) async => mockDocSnap);
+        when(() => mockDocSnap.exists).thenReturn(true);
+
+        when(
+          () => mockQuery.startAfterDocument(mockDocSnap),
+        ).thenReturn(mockQuery);
+
+        when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
+        when(
+          () => mockQuerySnap.docs,
+        ).thenReturn([mockQueryDocSnap2]); // Only headline2 should be returned
+        when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
+        when(mockQueryDocSnap2.data).thenReturn(firestoreData2);
+
+        final result = await headlinesFirestore.getHeadlines(
+          limit: 2,
+          startAfterId: 'id1',
+          category: 'category1',
+        );
+        expect(result, equals([headline2]));
+      });
+
+      test('returns headlines with category and source filter', () async {
+        final publishedAt = DateTime.now();
+        final headline1 = createHeadline(
+          id: 'id1',
+          categories: ['category1'],
+          source: 'source1',
+          publishedAt: publishedAt,
+        );
+        final firestoreData1 = createMockFirestoreData(headline1);
+
+        final mockQuery = MockQuery();
+        final mockQuerySnap = MockQuerySnapshot();
+        final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
+
+        when(
+          () => mockCollection.where('categories', arrayContains: 'category1'),
+        ).thenReturn(mockQuery);
+        when(
+          () => mockQuery.where('source', isEqualTo: 'source1'),
+        ).thenReturn(mockQuery);
+        when(
+          () => mockQuery.orderBy(any(), descending: any(named: 'descending')),
+        ).thenReturn(mockQuery);
+        when(() => mockQuery.limit(any())).thenReturn(mockQuery);
+        when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
+        when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
+        when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
+
+        final result = await headlinesFirestore.getHeadlines(
+          limit: 2,
+          category: 'category1',
+          source: 'source1',
+        );
+        expect(result, equals([headline1]));
       });
 
       test('throws HeadlinesFetchException on failure', () async {
@@ -339,7 +624,7 @@ void main() {
           title: 'Search Query Test',
           publishedAt: publishedAt,
         );
-        final firestoreData1 = createFirestoreData(headline1);
+        final firestoreData1 = createMockFirestoreData(headline1);
 
         final mockQuery = MockQuery();
         final mockQuerySnap = MockQuerySnapshot();
@@ -362,13 +647,11 @@ void main() {
         when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
         when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
 
-        expect(
-          () => headlinesFirestore.searchHeadlines(
-            query: 'Search Query',
-            limit: 1,
-          ),
-          throwsA(isA<HeadlinesSearchException>()),
+        final result = await headlinesFirestore.searchHeadlines(
+          query: 'Search Query',
+          limit: 1,
         );
+        expect(result, equals([headline1]));
       });
 
       test('throws HeadlinesSearchException on failure', () async {
@@ -396,6 +679,131 @@ void main() {
           throwsA(isA<HeadlinesSearchException>()),
         );
       });
+
+      test('returns headlines with startAfterId', () async {
+        final publishedAt1 = DateTime.now();
+        final publishedAt2 = DateTime.now().add(const Duration(seconds: 1));
+        final headline1 = createHeadline(
+          id: 'id1',
+          title: 'Search Query Test',
+          publishedAt: publishedAt1,
+        );
+        final headline2 = createHeadline(
+          id: 'id2',
+          title: 'Search Query Test',
+          publishedAt: publishedAt2,
+        );
+        final firestoreData1 = createMockFirestoreData(headline1);
+        final firestoreData2 = createMockFirestoreData(headline2);
+
+        final mockQuerySnap = MockQuerySnapshot();
+        final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
+        final mockQueryDocSnap2 = MockQueryDocumentSnapshot();
+
+        final mockDocRef = MockDocumentReference();
+        final mockDocSnap = MockDocumentSnapshot();
+        final mockQuery = MockQuery();
+
+        when(
+          () => mockCollection.where(
+            'title',
+            isGreaterThanOrEqualTo: 'Search Query',
+          ),
+        ).thenReturn(mockQuery);
+        when(
+          () => mockQuery.where(
+            'title',
+            isLessThanOrEqualTo: 'Search Query\uf8ff',
+          ),
+        ).thenReturn(mockQuery);
+        when(() => mockQuery.limit(any())).thenReturn(mockQuery);
+        when(() => mockCollection.doc('id1')).thenReturn(mockDocRef);
+        when(mockDocRef.get).thenAnswer((_) async => mockDocSnap);
+        when(() => mockDocSnap.exists).thenReturn(true);
+        when(
+          () => mockQuery.startAfterDocument(mockDocSnap),
+        ).thenReturn(mockQuery);
+        when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
+        when(
+          () => mockQuerySnap.docs,
+        ).thenReturn([mockQueryDocSnap2]); // Only headline2 should be returned
+        when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
+        when(mockQueryDocSnap2.data).thenReturn(firestoreData2);
+
+        final result = await headlinesFirestore.searchHeadlines(
+          query: 'Search Query',
+          limit: 1,
+          startAfterId: 'id1',
+        );
+        expect(result, equals([headline2]));
+      });
+    });
+
+    group('createHeadline and getHeadline - Data Consistency', () {
+      test('creates and retrieves a headline with consistent data', () async {
+        final publishedAt = DateTime.now();
+        final headline = createHeadline(publishedAt: publishedAt);
+        final mockDocRef = MockDocumentReference();
+        final mockDocSnap = MockDocumentSnapshot();
+
+        // Mock collection.doc() to return the same mockDocRef
+        when(() => mockCollection.doc(headline.id)).thenReturn(mockDocRef);
+
+        // Mock getHeadline
+        when(mockDocRef.get).thenAnswer((_) async => mockDocSnap);
+        when(() => mockDocSnap.exists).thenReturn(true);
+        when(mockDocSnap.data).thenReturn(createMockFirestoreData(headline));
+
+        // Mock createHeadline
+        when(() => mockDocRef.set(any())).thenAnswer((_) async {});
+
+        // Create and then get the headline
+        final createdHeadline = await headlinesFirestore.createHeadline(
+          headline: headline,
+        );
+        final retrievedHeadline = await headlinesFirestore.getHeadline(
+          id: headline.id,
+        );
+
+        // Verify consistency
+        expect(retrievedHeadline, equals(createdHeadline));
+        expect(retrievedHeadline!.toJson(), equals(createdHeadline.toJson()));
+      });
+    });
+
+    group('updateHeadline and getHeadline - Data Consistency', () {
+      test('updates and retrieves a headline with consistent data', () async {
+        final publishedAt = DateTime.now();
+        final headline = createHeadline(publishedAt: publishedAt);
+        final updatedHeadline = headline.copyWith(title: 'Updated Title');
+        final mockDocRef = MockDocumentReference();
+        final mockDocSnap = MockDocumentSnapshot();
+
+        // Mock collection.doc() to return the same mockDocRef
+        when(() => mockCollection.doc(headline.id)).thenReturn(mockDocRef);
+
+        // Mock getHeadline
+        when(mockDocRef.get).thenAnswer((_) async => mockDocSnap);
+        when(() => mockDocSnap.exists).thenReturn(true);
+        when(
+          mockDocSnap.data,
+        ).thenReturn(createMockFirestoreData(updatedHeadline));
+
+        // Mock updateHeadline
+        when(() => mockDocRef.update(any())).thenAnswer((_) async {});
+
+        // Update and then get the headline
+        final result = await headlinesFirestore.updateHeadline(
+          headline: updatedHeadline,
+        );
+        final retrievedHeadline = await headlinesFirestore.getHeadline(
+          id: headline.id,
+        );
+
+        // Verify consistency
+        expect(retrievedHeadline, equals(result));
+        expect(retrievedHeadline!.toJson(), equals(updatedHeadline.toJson()));
+      });
     });
 
     group('updateHeadline', () {
@@ -414,7 +822,7 @@ void main() {
         expect(result, equals(headline));
         verify(() => mockCollection.doc(headline.id)).called(1);
         verify(
-          () => mockDocRef.update(createFirestoreData(headline)),
+          () => mockDocRef.update(createExpectedFirestoreData(headline)),
         ).called(1);
       });
 
