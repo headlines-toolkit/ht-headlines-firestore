@@ -8,9 +8,8 @@ import 'package:ht_headlines_client/ht_headlines_client.dart';
 /// {@endtemplate}
 class HtHeadlinesFirestore implements HtHeadlinesClient {
   /// {@macro ht_headlines_firestore}
-  HtHeadlinesFirestore({
-    required FirebaseFirestore firestore,
-  }) : _firestore = firestore;
+  HtHeadlinesFirestore({required FirebaseFirestore firestore})
+    : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 
@@ -20,8 +19,7 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
   @override
   Future<Headline> createHeadline({required Headline headline}) async {
     try {
-      final docRef =
-          _firestore.collection(_collectionName).doc(headline.id);
+      final docRef = _firestore.collection(_collectionName).doc(headline.id);
       await docRef.set(_toFirestoreMap(headline));
       return headline;
     } catch (e) {
@@ -61,8 +59,9 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
     String? eventCountry,
   }) async {
     try {
-      Query<Map<String, dynamic>> query =
-          _firestore.collection(_collectionName);
+      Query<Map<String, dynamic>> query = _firestore.collection(
+        _collectionName,
+      );
 
       if (category != null) {
         query = query.where('categories', arrayContains: category);
@@ -71,7 +70,7 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
       if (source != null) {
         query = query.where('source', isEqualTo: source);
       }
-      
+
       if (eventCountry != null) {
         query = query.where('eventCountry', isEqualTo: eventCountry);
       }
@@ -82,10 +81,13 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
 
       if (startAfterId != null) {
         final startAfterDoc =
-            await _firestore.collection(_collectionName).doc(startAfterId).get();
+            await _firestore
+                .collection(_collectionName)
+                .doc(startAfterId)
+                .get();
         query = query.startAfterDocument(startAfterDoc);
       }
-      
+
       query = query.orderBy('publishedAt', descending: true);
 
       final snapshot = await query.get();
@@ -104,23 +106,28 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
     String? startAfterId,
   }) async {
     try {
-      Query<Map<String, dynamic>> firestoreQuery =
-          _firestore.collection(_collectionName);
+      Query<Map<String, dynamic>> firestoreQuery = _firestore.collection(
+        _collectionName,
+      );
 
       // Basic full-text search simulation using title.  Firestore doesn't
       // support native full-text search, so this is a very limited
       // implementation.  For real full-text search, consider Algolia,
       // Elasticsearch, or Typesense.
-      firestoreQuery = firestoreQuery.where('title', isGreaterThanOrEqualTo: query)
+      firestoreQuery = firestoreQuery
+          .where('title', isGreaterThanOrEqualTo: query)
           .where('title', isLessThanOrEqualTo: '$query\uf8ff');
 
-        if (limit != null) {
+      if (limit != null) {
         firestoreQuery = firestoreQuery.limit(limit);
       }
 
       if (startAfterId != null) {
         final startAfterDoc =
-            await _firestore.collection(_collectionName).doc(startAfterId).get();
+            await _firestore
+                .collection(_collectionName)
+                .doc(startAfterId)
+                .get();
         firestoreQuery = firestoreQuery.startAfterDocument(startAfterDoc);
       }
 
@@ -160,8 +167,9 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
     final json = headline.toJson();
     final publishedAt = json['publishedAt'];
     if (publishedAt is String) {
-      json['publishedAt'] =
-          Timestamp.fromDate(DateTime.parse(publishedAt).toUtc());
+      json['publishedAt'] = Timestamp.fromDate(
+        DateTime.parse(publishedAt).toUtc(),
+      );
     }
     return json;
   }
