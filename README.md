@@ -21,7 +21,7 @@ Add `ht_headlines_firestore` as a dependency to your `pubspec.yaml` file:
 dependencies:
   ht_headlines_firestore:
     git:
-      url: https://github.com/Headlines-Toolkit/ht-headlines-firestore.git
+      url: https://github.com/headlines-toolkit/ht-headlines-firestore.git
       ref: main
 ```
 
