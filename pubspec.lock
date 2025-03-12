@@ -133,8 +133,8 @@ packages:
     description:
       path: "."
       ref: main
-      resolved-ref: "215955c2d69c92a0ea85ea82e666afdfeb93b366"
-      url: "https://github.com/Headlines-Toolkit/ht-headlines-client.git"
+      resolved-ref: "3bcb5464e860b27ba9613bf2e4b5f3b24dbd1b39"
+      url: "https://github.com/headlines-toolkit/ht-headlines-client.git"
     source: git
     version: "0.0.0"
   json_annotation:
