@@ -41,7 +41,7 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
     try {
       final doc = await _firestore.collection(_collectionName).doc(id).get();
       if (doc.exists) {
-        return Headline.fromJson(_fromFirestoreMap(doc.data()!));
+        return Headline.fromJson(doc.data()!).copyWith(id: doc.id);
       } else {
         return null;
       }
@@ -92,7 +92,7 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
 
       final snapshot = await query.get();
       return snapshot.docs
-          .map((doc) => Headline.fromJson(_fromFirestoreMap(doc.data())))
+          .map((doc) => Headline.fromJson(doc.data()).copyWith(id: doc.id))
           .toList();
     } catch (e) {
       throw HeadlinesFetchException('Failed to fetch headlines: $e');
@@ -133,7 +133,7 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
 
       final snapshot = await firestoreQuery.get();
       return snapshot.docs
-          .map((doc) => Headline.fromJson(_fromFirestoreMap(doc.data())))
+          .map((doc) => Headline.fromJson(doc.data()).copyWith(id: doc.id))
           .toList();
     } catch (e) {
       throw HeadlinesSearchException('Failed to search headlines: $e');
@@ -151,15 +151,6 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
     } catch (e) {
       throw HeadlineUpdateException('Failed to update headline: $e');
     }
-  }
-
-  // Convert Firestore Timestamp to DateTime for Headline model.
-  Map<String, dynamic> _fromFirestoreMap(Map<String, dynamic> json) {
-    final publishedAt = json['publishedAt'];
-    if (publishedAt is Timestamp) {
-      json['publishedAt'] = publishedAt.toDate();
-    }
-    return json;
   }
 
   // Convert DateTime to Firestore Timestamp for Firestore.
