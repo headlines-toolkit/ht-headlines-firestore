@@ -79,6 +79,8 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
         query = query.limit(limit);
       }
 
+      query = query.orderBy('publishedAt', descending: true);
+
       if (startAfterId != null) {
         final startAfterDoc =
             await _firestore
@@ -87,8 +89,6 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
                 .get();
         query = query.startAfterDocument(startAfterDoc);
       }
-
-      query = query.orderBy('publishedAt', descending: true);
 
       final snapshot = await query.get();
       return snapshot.docs
@@ -121,6 +121,8 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
       if (limit != null) {
         firestoreQuery = firestoreQuery.limit(limit);
       }
+
+      firestoreQuery = firestoreQuery.orderBy('publishedAt', descending: true);
 
       if (startAfterId != null) {
         final startAfterDoc =
