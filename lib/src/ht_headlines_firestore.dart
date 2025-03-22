@@ -41,7 +41,7 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
     try {
       final doc = await _firestore.collection(_collectionName).doc(id).get();
       if (doc.exists) {
-        return Headline.fromJson(doc.data()!).copyWith(id: doc.id);
+        return _fromFirestore(doc.data()!, doc.id);
       } else {
         return null;
       }
@@ -92,7 +92,7 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
 
       final snapshot = await query.get();
       return snapshot.docs
-          .map((doc) => Headline.fromJson(doc.data()).copyWith(id: doc.id))
+          .map((doc) => _fromFirestore(doc.data(), doc.id))
           .toList();
     } catch (e) {
       throw HeadlinesFetchException('Failed to fetch headlines: $e');
@@ -133,7 +133,7 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
 
       final snapshot = await firestoreQuery.get();
       return snapshot.docs
-          .map((doc) => Headline.fromJson(doc.data()).copyWith(id: doc.id))
+          .map((doc) => _fromFirestore(doc.data(), doc.id))
           .toList();
     } catch (e) {
       throw HeadlinesSearchException('Failed to search headlines: $e');
@@ -153,7 +153,31 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
     }
   }
 
-  // Convert DateTime to Firestore Timestamp for Firestore.
+  /// Converts a Firestore document data map to a [Headline] object.
+  ///
+  /// This method handles: 
+  /// - the conversion of the `publishedAt` field from a Firestore 
+  /// [Timestamp] to a [String].
+  /// - assigning the correct Firestore document id to the [Headline]
+  ///
+  /// [data]: The Firestore document data.
+  /// [id]: The document ID.
+  Headline _fromFirestore(Map<String, dynamic> data, String id) {
+    try {
+      dynamic publishedAt = data['publishedAt'];
+      if (publishedAt is Timestamp) {
+        publishedAt = publishedAt.toDate().toString();
+      }
+      return Headline.fromJson({...data, 'publishedAt': publishedAt, 'id': id});
+    } catch (e) {
+      throw HeadlinesFetchException('Failed to process headline: $e');
+    }
+  }
+
+  /// Converts a [Headline] object to a Firestore document data map.
+  ///
+  /// This method handles the conversion of the `publishedAt` field
+  /// from a [String] to a Firestore [Timestamp].
   Map<String, dynamic> _toFirestoreMap(Headline headline) {
     final json = headline.toJson();
     final publishedAt = json['publishedAt'];
