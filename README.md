@@ -4,10 +4,10 @@ This package is a Firestore implementation of the `ht_headlines_client` package,
 
 This package provides a Firestore implementation for the `ht_headlines_client`. It allows you to use Firebase Firestore as the backend for storing and retrieving headline data.
 
-*   **Create Headline:** Adds a new headline to the Firestore database.
-*   **Read Headline:** Retrieves a specific headline by its ID from Firestore.
-*   **Read Headlines:** Fetches headlines from the Firestore database, with options for limiting, filtering by category, source and eventCountry, and pagination.
-*   **Update Headline:** Modifies an existing headline in Firestore.
+*   **Create Headline:** Adds a new headline (using `Source`, `Category`, and `Country` objects) to the Firestore database.
+*   **Read Headline:** Retrieves a specific headline by its ID from Firestore, populating the `Source`, `Category`, and `Country` objects.
+*   **Read Headlines:** Fetches headlines from the Firestore database, with options for limiting, filtering by category ID, source ID, and event country ISO code, and pagination.
+*   **Update Headline:** Modifies an existing headline (using `Source`, `Category`, and `Country` objects) in Firestore.
 *   **Delete Headline:** Removes a headline from Firestore.
 *   **Search Headlines:** Queries Firestore for headlines based on a search term (performs a basic full-text search simulation on the title field). Supports limiting and pagination.
 
@@ -47,11 +47,20 @@ Here are a few examples of how to use the `HtHeadlinesFirestore`:
 ```dart
 final firestore = FirebaseFirestore.instance;
 final firestoreClient = HtHeadlinesFirestore(firestore: firestore);
+
+// Assuming you have instances of Source, Category, and Country
+final source = Source(id: 'tech_news_id', name: 'Tech News');
+final category = Category(id: 'tech_cat_id', name: 'Technology');
+final country = Country(id: 'us_id', isoCode: 'US', name: 'United States', flagUrl: '...');
+
 final headline = Headline(
     id: 'unique_headline_id',
     title: 'Example Headline',
     description: 'This is an example headline.',
     publishedAt: DateTime.now(),
+    source: source,
+    categories: [category],
+    eventCountry: country,
   );
 try {
     final createdHeadline = await firestoreClient.createHeadline(headline: headline);
@@ -86,11 +95,12 @@ final firestore = FirebaseFirestore.instance;
 final firestoreClient = HtHeadlinesFirestore(firestore: firestore);
 
 try {
+    // Note: Filter parameters are the IDs/codes, not the full objects
     final headlines = await firestoreClient.getHeadlines(
         limit: 10,
-        category: 'technology',
-        source: 'Tech News',
-        eventCountry: 'US',
+        category: 'tech_cat_id', // Filter by Category ID
+        source: 'tech_news_id', // Filter by Source ID
+        eventCountry: 'US', // Filter by Country ISO Code
         startAfterId: 'last_headline_id', // For pagination
     );
     print('Found ${headlines.length} headlines.');
@@ -106,11 +116,20 @@ try {
 ```dart
 final firestore = FirebaseFirestore.instance;
 final firestoreClient = HtHeadlinesFirestore(firestore: firestore);
+
+// Assuming you have instances of Source, Category, and Country
+final updatedSource = Source(id: 'updated_source_id', name: 'Updated Source');
+final updatedCategory = Category(id: 'updated_cat_id', name: 'Updated Category');
+final updatedCountry = Country(id: 'gb_id', isoCode: 'GB', name: 'United Kingdom', flagUrl: '...');
+
 final headlineToUpdate = Headline(
     id: 'unique_headline_id',
     title: 'Updated Headline Title',
     description: 'This is an updated headline description.',
-     publishedAt: DateTime.now(),
+    publishedAt: DateTime.now(),
+    source: updatedSource,
+    categories: [updatedCategory],
+    eventCountry: updatedCountry,
   );
 try {
   final updatedHeadline =
