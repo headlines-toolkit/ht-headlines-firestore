@@ -145,7 +145,7 @@ packages:
     source: sdk
     version: "0.0.0"
   ht_categories_client:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       path: "."
       ref: HEAD
@@ -154,7 +154,7 @@ packages:
     source: git
     version: "0.0.0"
   ht_countries_client:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       path: "."
       ref: HEAD
@@ -166,13 +166,13 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: main
+      ref: HEAD
       resolved-ref: b83289ed3d5e940936427acdc0004aa387b5e582
       url: "https://github.com/headlines-toolkit/ht-headlines-client.git"
     source: git
     version: "0.0.0"
   ht_sources_client:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       path: "."
       ref: HEAD
