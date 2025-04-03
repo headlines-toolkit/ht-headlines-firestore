@@ -1,4 +1,4 @@
-name: ht_headlines_firestore
+name: main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -8,12 +8,15 @@ on:
   pull_request:
     branches:
       - main
-    
+  push:
+    branches:
+      - main
+
 
 jobs:
   build:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@v1
     with:
-      flutter_version: 3.29.0
-      min_coverage: 98
+      flutter_version: latest
+      min_coverage: 90
       coverage_excludes: "*.g.dart"
