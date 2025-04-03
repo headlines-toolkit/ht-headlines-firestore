@@ -17,5 +17,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  ht_categories_client: any
+  ht_countries_client: any
+  ht_sources_client: any
   mocktail: ^1.0.4
   very_good_analysis: ^7.0.0
