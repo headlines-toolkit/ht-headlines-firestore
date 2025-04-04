@@ -1,8 +1,12 @@
 //
 // ignore_for_file: lines_longer_than_80_chars, avoid_catches_without_on_clauses
 
-import 'package:cloud_firestore/cloud_firestore.dart';
+// Hide Source from cloud_firestore to avoid conflict with ht_sources_client
+import 'package:cloud_firestore/cloud_firestore.dart' hide Source;
+import 'package:ht_categories_client/ht_categories_client.dart';
+import 'package:ht_countries_client/ht_countries_client.dart';
 import 'package:ht_headlines_client/ht_headlines_client.dart';
+import 'package:ht_sources_client/ht_sources_client.dart';
 
 /// {@template ht_headlines_firestore}
 /// A Firestore implementation of the [HtHeadlinesClient].
@@ -55,64 +59,117 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
   Future<List<Headline>> getHeadlines({
     int? limit,
     String? startAfterId,
-    // Parameters match HtHeadlinesClient interface
-    String? category,
-    String? source,
-    String? eventCountry,
+    List<Category>? categories,
+    List<Source>? sources,
+    List<Country>? eventCountries,
   }) async {
     try {
+      // Start with the base query for the headlines collection.
       Query<Map<String, dynamic>> query = _firestore.collection(
         _collectionName,
       );
 
-      // Note: Firestore's arrayContains requires an exact match for map elements.
-      // Assuming 'category' parameter is the category ID.
-      // Ensure the Category object stored in Firestore has an 'id' field.
-      if (category != null) {
-        // We need to construct the map representation of the Category
-        // as it would be stored in Firestore for the arrayContains query.
-        // Assuming Category.toJson() produces {'id': ..., 'name': ...} etc.
-        // and we only need to match the ID for filtering.
-        // A more robust solution might involve storing a separate array of IDs.
+      // Apply category filter:
+      // If categories are provided, filter headlines where the 'category' field
+      // matches *any* of the provided categories (OR logic within the list).
+      // Firestore's 'whereIn' requires the exact map representation.
+      if (categories != null && categories.isNotEmpty) {
+        // Note: Firestore 'whereIn' queries are limited to 10 items per query.
+        // If more than 10 categories are needed, multiple queries might be
+        // required, or the data model might need adjustment (e.g., storing
+        // category IDs in an array field). For now, assuming <= 10.
         query = query.where(
-          'categories',
-          arrayContains: {
-            'id': category,
-          }, // Query based on category ID within the map
+          'category', // The field name in Firestore for the single category
+          // Map categories to their JSON representation *without* the 'id' field
+          // to match the structure stored in Firestore documents.
+          whereIn:
+              categories.map((c) {
+                final json = c.toJson()..remove('id');
+                return json;
+              }).toList(),
         );
       }
 
-      // Query nested fields using dot notation. Assuming 'source' is the source ID.
-      if (source != null) {
-        query = query.where('source.id', isEqualTo: source);
+      // Apply source filter:
+      // If sources are provided, filter headlines where the 'source' field
+      // matches *any* of the provided sources (OR logic within the list).
+      // This acts as an AND condition with the category filter if both are present.
+      if (sources != null && sources.isNotEmpty) {
+        // Similar 'whereIn' limitation applies (max 10 items).
+        query = query.where(
+          'source', // The field name in Firestore for the single source
+          // Map sources to their JSON representation *without* the 'id' field.
+          whereIn:
+              sources.map((s) {
+                final json = s.toJson()..remove('id');
+                return json;
+              }).toList(),
+        );
       }
 
-      // Query nested fields using dot notation. Assuming 'eventCountry' is the country ISO code.
-      if (eventCountry != null) {
-        query = query.where('eventCountry.iso_code', isEqualTo: eventCountry);
+      // Apply event country filter:
+      // If eventCountries are provided, filter headlines where the 'event_country'
+      // field matches *any* of the provided countries (OR logic within the list).
+      // This acts as an AND condition with other filters if present.
+      if (eventCountries != null && eventCountries.isNotEmpty) {
+        // Similar 'whereIn' limitation applies (max 10 items).
+        query = query.where(
+          'event_country', // The field name in Firestore
+          // Map countries to their JSON representation *without* the 'id' field.
+          whereIn:
+              eventCountries.map((c) {
+                final json = c.toJson()..remove('id');
+                return json;
+              }).toList(),
+        );
       }
 
+      // Apply limit if specified.
       if (limit != null) {
         query = query.limit(limit);
       }
 
+      // Order results by publication date, newest first.
+      // Note: Firestore requires the first orderBy field to match the field
+      // used in inequality filters (like startAfterDocument implicitly uses).
+      // If complex filtering/sorting is needed, indexing might be required.
+      // For 'whereIn', Firestore might require composite indexes if combined
+      // with other range/inequality filters or multiple orderBy clauses.
+      // We are ordering by 'publishedAt' which is common.
       query = query.orderBy('publishedAt', descending: true);
 
+      // Handle pagination: Start fetching after the specified document ID.
       if (startAfterId != null) {
+        // Fetch the document snapshot to use with startAfterDocument.
         final startAfterDoc =
             await _firestore
                 .collection(_collectionName)
                 .doc(startAfterId)
                 .get();
-        query = query.startAfterDocument(startAfterDoc);
+        if (startAfterDoc.exists) {
+          // Use the document snapshot for pagination.
+          query = query.startAfterDocument(startAfterDoc);
+        } else {
+          // Handle case where startAfterId doesn't exist, maybe log or ignore.
+          // For now, we proceed without pagination if the doc is not found.
+          // Consider logging this scenario for debugging.
+          // print('Warning: startAfterId $startAfterId not found.');
+        }
       }
 
+      // Execute the query.
       final snapshot = await query.get();
+
+      // Convert Firestore documents to Headline objects using the helper.
       return snapshot.docs
           .map((doc) => _fromFirestore(doc.data(), doc.id))
           .toList();
     } catch (e) {
-      throw HeadlinesFetchException('Failed to fetch headlines: $e');
+      // Catch potential Firestore errors or issues during data conversion.
+      // Consider more specific error handling or logging if needed.
+      throw HeadlinesFetchException(
+        'Failed to fetch headlines from Firestore: $e',
+      );
     }
   }
 
@@ -127,9 +184,9 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
         _collectionName,
       );
 
-      // Basic full-text search simulation using title.  Firestore doesn't
+      // Basic full-text search simulation using title. Firestore doesn't
       // support native full-text search, so this is a very limited
-      // implementation.  For real full-text search, consider Algolia,
+      // implementation. For real full-text search, consider Algolia,
       // Elasticsearch, or Typesense.
       firestoreQuery = firestoreQuery
           .where('title', isGreaterThanOrEqualTo: query)
@@ -152,7 +209,9 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
                 .collection(_collectionName)
                 .doc(startAfterId)
                 .get();
-        firestoreQuery = firestoreQuery.startAfterDocument(startAfterDoc);
+        if (startAfterDoc.exists) {
+          firestoreQuery = firestoreQuery.startAfterDocument(startAfterDoc);
+        }
       }
 
       final snapshot = await firestoreQuery.get();
@@ -177,8 +236,6 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
     }
   }
 
-  /// Converts a Firestore document data map to a [Headline] object.
-  ///
   /// Converts a Firestore document data map to a [Headline] object.
   ///
   /// Handles the conversion of Firestore Timestamps to DateTime objects
@@ -221,30 +278,45 @@ class HtHeadlinesFirestore implements HtHeadlinesClient {
   /// Relies on `headline.toJson()` generated by `json_serializable`
   /// (with `explicitToJson: true`) to handle nested objects correctly.
   /// Converts `DateTime` fields like `publishedAt` back to Firestore Timestamps.
+  /// **Important:** Removes the 'id' field from the map, as the Firestore
+  /// document ID serves as the canonical identifier.
   Map<String, dynamic> _toFirestoreMap(Headline headline) {
     try {
-      final json = headline.toJson();
+      // Generate the JSON map from the Headline object.
+      final json =
+          headline.toJson()
+            // Remove the 'id' field. The Firestore document ID is used instead.
+            // This ensures the document data strictly mirrors the model properties
+            // *excluding* the ID.
+            ..remove('id');
 
       // Convert DateTime back to Timestamp for publishedAt if present.
-      final publishedAtDateTime = json['publishedAt'];
-      if (publishedAtDateTime is DateTime) {
-        json['publishedAt'] = Timestamp.fromDate(publishedAtDateTime.toUtc());
-      } else if (publishedAtDateTime is String) {
-        // Handle case where it might already be a string (less likely now)
+      // Firestore requires Timestamps for date/time fields for proper querying.
+      final publishedAtValue = json['publishedAt'];
+      if (publishedAtValue is String) {
+        // If toJson produced an ISO string, parse it and convert to Timestamp.
         try {
           json['publishedAt'] = Timestamp.fromDate(
-            DateTime.parse(publishedAtDateTime).toUtc(),
+            DateTime.parse(publishedAtValue).toUtc(),
           );
         } catch (_) {
-          // If parsing fails, maybe remove or log, depending on requirements.
+          // If parsing fails, remove the field to avoid storing invalid data.
+          // Consider logging this failure.
           json.remove('publishedAt');
         }
+      } else if (publishedAtValue is DateTime) {
+        // If toJson somehow returned DateTime (less likely with json_serializable),
+        // convert directly.
+        json['publishedAt'] = Timestamp.fromDate(publishedAtValue.toUtc());
       }
+      // If publishedAt is null or already a Timestamp, no action needed.
 
-      // json_serializable with explicitToJson handles nested objects.
+      // json_serializable with explicitToJson handles nested objects
+      // (Source, Category, Country) conversion within toJson().
       return json;
     } catch (e) {
-      // Consider logging the stack trace.
+      // Catch potential errors during JSON conversion or timestamp handling.
+      // Consider logging the stack trace for better debugging.
       throw HeadlineUpdateException(
         // Or Create/Update depending on context
         'Failed to convert Headline to Firestore map: $e',
