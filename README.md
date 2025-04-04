@@ -4,10 +4,14 @@ This package is a Firestore implementation of the `ht_headlines_client` package,
 
 This package provides a Firestore implementation for the `ht_headlines_client`. It allows you to use Firebase Firestore as the backend for storing and retrieving headline data.
 
-*   **Create Headline:** Adds a new headline (using `Source`, `Category`, and `Country` objects) to the Firestore database.
+*   **Create Headline:** Adds a new headline to the Firestore database. The `Headline` model includes `Source`, `Category` (single), and `Country` objects.
 *   **Read Headline:** Retrieves a specific headline by its ID from Firestore, populating the `Source`, `Category`, and `Country` objects.
-*   **Read Headlines:** Fetches headlines from the Firestore database, with options for limiting, filtering by category ID, source ID, and event country ISO code, and pagination.
-*   **Update Headline:** Modifies an existing headline (using `Source`, `Category`, and `Country` objects) in Firestore.
+*   **Read Headlines:** Fetches headlines from the Firestore database. Supports limiting, pagination (`startAfterId`), and filtering by lists of `Category`, `Source`, or `Country` objects.
+    *   **Filtering Logic:**
+        *   Providing a list (e.g., `categories: [catA, catB]`) filters for headlines where the corresponding field matches **any** item in the list (OR logic within the list).
+        *   Providing multiple lists (e.g., `categories: [catA]`, `sources: [srcX]`) combines filters with **AND** logic.
+        *   Uses Firestore `whereIn` queries internally, comparing against the JSON map representation of the filter objects *without* their `id` field.
+*   **Update Headline:** Modifies an existing headline in Firestore, using `Source`, `Category`, and `Country` objects.
 *   **Delete Headline:** Removes a headline from Firestore.
 *   **Search Headlines:** Queries Firestore for headlines based on a search term (performs a basic full-text search simulation on the title field). Supports limiting and pagination.
 
@@ -59,7 +63,7 @@ final headline = Headline(
     description: 'This is an example headline.',
     publishedAt: DateTime.now(),
     source: source,
-    categories: [category],
+    category: category, // Headline uses a single category
     eventCountry: country,
   );
 try {
@@ -94,13 +98,19 @@ try {
 final firestore = FirebaseFirestore.instance;
 final firestoreClient = HtHeadlinesFirestore(firestore: firestore);
 
+// Assuming you have instances of Category, Source, and Country objects
+final techCategory = Category(id: 'tech_cat_id', name: 'Technology');
+final newsSource = Source(id: 'news_src_id', name: 'News Source');
+final usCountry = Country(id: 'us_id', isoCode: 'US', name: 'United States', flagUrl: '...');
+
 try {
-    // Note: Filter parameters are the IDs/codes, not the full objects
+    // Pass lists of objects for filtering.
+    // OR logic applies within each list, AND logic applies between lists.
     final headlines = await firestoreClient.getHeadlines(
         limit: 10,
-        category: 'tech_cat_id', // Filter by Category ID
-        source: 'tech_news_id', // Filter by Source ID
-        eventCountry: 'US', // Filter by Country ISO Code
+        categories: [techCategory], // Filter by Category objects
+        sources: [newsSource],     // Filter by Source objects
+        // eventCountries: [usCountry], // Optionally filter by Country objects
         startAfterId: 'last_headline_id', // For pagination
     );
     print('Found ${headlines.length} headlines.');
@@ -128,7 +138,7 @@ final headlineToUpdate = Headline(
     description: 'This is an updated headline description.',
     publishedAt: DateTime.now(),
     source: updatedSource,
-    categories: [updatedCategory],
+    category: updatedCategory, // Headline uses a single category
     eventCountry: updatedCountry,
   );
 try {
