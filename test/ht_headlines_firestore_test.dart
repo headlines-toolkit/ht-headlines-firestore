@@ -53,9 +53,8 @@ void main() {
       String? description = 'Test Description',
       String? url = 'https://example.com',
       String? imageUrl = 'https://example.com/image.jpg',
-      // Use object types now
       Source? source,
-      List<Category>? categories,
+      Category? category,
       Country? eventCountry,
     }) {
       // Provide default objects if null
@@ -79,16 +78,24 @@ void main() {
         imageUrl: imageUrl,
         publishedAt: publishedAt,
         source: source ?? defaultSource,
-        categories: categories ?? [defaultCategory],
+        category: category ?? defaultCategory,
         eventCountry: eventCountry ?? defaultCountry,
       );
     }
 
     // Helper function to create Firestore data as it would be stored
-    // in Firestore.
+    // (output of _toFirestoreMap).
     Map<String, dynamic> createExpectedFirestoreData(Headline headline) {
       final json = headline.toJson();
-      json['publishedAt'] = Timestamp.fromDate(headline.publishedAt!);
+      json.remove(
+        'id',
+      ); // The id is stored as the document ID, not in the data.
+      if (headline.publishedAt != null) {
+        json['publishedAt'] = Timestamp.fromDate(headline.publishedAt!.toUtc());
+      } else {
+        json.remove('publishedAt');
+      }
+      // Nested objects are handled by toJson().
       return json;
     }
 
@@ -108,11 +115,11 @@ void main() {
                 : null,
         // Nested objects are stored as maps
         'source': headline.source?.toJson(),
-        'categories': headline.categories?.map((c) => c.toJson()).toList(),
+        'category': headline.category?.toJson(),
         'event_country': headline.eventCountry?.toJson(),
-        // Do NOT include 'id' here, as it comes from doc.id, not doc.data()
+        // The 'id' comes from doc.id, not doc.data().
       };
-      // Remove null values as Firestore might omit them
+      // Remove null values as Firestore might omit them.
       data.removeWhere((key, value) => value == null);
       return data;
     }
@@ -236,9 +243,9 @@ void main() {
         // Simulate invalid data from Firestore (wrong type for timestamp)
         final invalidFirestoreData = <String, dynamic>{
           'title': 'Test Title',
-          'publishedAt': 'not-a-valid-iso-string', // Invalid data type/format
+          'publishedAt': 'not-a-valid-iso-string', // Invalid format
           'source': headline.source?.toJson(),
-          'categories': headline.categories?.map((c) => c.toJson()).toList(),
+          'category': headline.category?.toJson(),
           'event_country': headline.eventCountry?.toJson(),
         };
         final mockDocRef = MockDocumentReference();
@@ -265,9 +272,9 @@ void main() {
         final invalidFirestoreData = <String, dynamic>{
           // 'title': headline.title, // Intentionally missing
           'description': headline.description,
-          'publishedAt': Timestamp.fromDate(publishedAt), // Correct type now
+          'publishedAt': Timestamp.fromDate(publishedAt),
           'source': headline.source?.toJson(),
-          'categories': headline.categories?.map((c) => c.toJson()).toList(),
+          'category': headline.category?.toJson(),
           'event_country': headline.eventCountry?.toJson(),
         };
         invalidFirestoreData.removeWhere((key, value) => value == null);
@@ -329,7 +336,7 @@ void main() {
         final category1 = Category(id: 'category1', name: 'Category 1');
         final headline1 = createHeadline(
           id: 'id1',
-          categories: [category1], // Pass Category object
+          category: category1, // Pass single Category object
           publishedAt: publishedAt,
         );
         final firestoreData1 = createMockFirestoreData(headline1);
@@ -337,11 +344,14 @@ void main() {
         final mockQuery = MockQuery();
         final mockQuerySnap = MockQuerySnapshot();
         final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
-        // Use the ID from the Category object for the query map
-        final categoryMap = {'id': category1.id};
+        // Map for whereIn should NOT contain 'id'
+        final categoryMapForQuery = category1.toJson()..remove('id');
 
         when(
-          () => mockCollection.where('categories', arrayContains: categoryMap),
+          () => mockCollection.where(
+            'category', // Field name
+            whereIn: [categoryMapForQuery], // Expect list of maps without id
+          ),
         ).thenReturn(mockQuery);
         when(
           () => mockQuery.orderBy('publishedAt', descending: true),
@@ -350,11 +360,12 @@ void main() {
         when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
         when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
         when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
-        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id); // Mock ID
+        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id);
 
+        // Call with list of categories
         final result = await headlinesFirestore.getHeadlines(
           limit: 2,
-          category: 'category1',
+          categories: [category1],
         );
 
         expect(result, equals([headline1]));
@@ -374,10 +385,14 @@ void main() {
         final mockQuery = MockQuery();
         final mockQuerySnap = MockQuerySnapshot();
         final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
+        // Map for whereIn should NOT contain 'id'
+        final sourceMapForQuery = source1.toJson()..remove('id');
 
         when(
-          // Query nested field 'source.id' using the ID from the Source object
-          () => mockCollection.where('source.id', isEqualTo: source1.id),
+          () => mockCollection.where(
+            'source', // Field name
+            whereIn: [sourceMapForQuery], // Expect list of maps without id
+          ),
         ).thenReturn(mockQuery);
         when(
           () => mockQuery.orderBy('publishedAt', descending: true),
@@ -386,11 +401,12 @@ void main() {
         when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
         when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
         when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
-        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id); // Mock ID
+        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id);
 
+        // Call with list of sources
         final result = await headlinesFirestore.getHeadlines(
           limit: 2,
-          source: 'source1',
+          sources: [source1],
         );
         expect(result, equals([headline1]));
       });
@@ -414,12 +430,13 @@ void main() {
         final mockQuery = MockQuery();
         final mockQuerySnap = MockQuerySnapshot();
         final mockQueryDocumentSnapshot = MockQueryDocumentSnapshot();
+        // Map for whereIn should NOT contain 'id'
+        final countryMapForQuery = country1.toJson()..remove('id');
 
         when(
-          // Query nested field 'eventCountry.iso_code' using the parameter value
           () => mockCollection.where(
-            'eventCountry.iso_code',
-            isEqualTo: 'country1', // Match the parameter passed below
+            'event_country', // Field name
+            whereIn: [countryMapForQuery], // Expect list of maps without id
           ),
         ).thenReturn(mockQuery);
         when(
@@ -429,12 +446,12 @@ void main() {
         when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
         when(() => mockQuerySnap.docs).thenReturn([mockQueryDocumentSnapshot]);
         when(mockQueryDocumentSnapshot.data).thenReturn(firestoreData1);
-        // Mock ID for the single document snapshot
         when(() => mockQueryDocumentSnapshot.id).thenReturn(headline1.id);
 
+        // Call with list of countries
         final result = await headlinesFirestore.getHeadlines(
           limit: 2,
-          eventCountry: 'country1',
+          eventCountries: [country1],
         );
         expect(result, equals([headline1]));
       });
@@ -446,7 +463,7 @@ void main() {
         final source1 = Source(id: 'source1', name: 'Source 1');
         final headline1 = createHeadline(
           id: 'id1',
-          categories: [category1], // Pass Category object
+          category: category1, // Pass single Category object
           source: source1, // Pass Source object
           publishedAt: publishedAt,
         );
@@ -455,15 +472,16 @@ void main() {
         final mockQuery = MockQuery();
         final mockQuerySnap = MockQuerySnapshot();
         final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
-        // Use the ID from the Category object for the query map
-        final categoryMap = {'id': category1.id};
+        // Maps for whereIn should NOT contain 'id'
+        final categoryMapForQuery = category1.toJson()..remove('id');
+        final sourceMapForQuery = source1.toJson()..remove('id');
 
         when(
-          () => mockCollection.where('categories', arrayContains: categoryMap),
+          () =>
+              mockCollection.where('category', whereIn: [categoryMapForQuery]),
         ).thenReturn(mockQuery);
         when(
-          // Use the ID from the Source object
-          () => mockQuery.where('source.id', isEqualTo: source1.id),
+          () => mockQuery.where('source', whereIn: [sourceMapForQuery]),
         ).thenReturn(mockQuery);
         when(
           () => mockQuery.orderBy('publishedAt', descending: true),
@@ -472,12 +490,13 @@ void main() {
         when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
         when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
         when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
-        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id); // Mock ID
+        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id);
 
+        // Call with lists
         final result = await headlinesFirestore.getHeadlines(
           limit: 2,
-          category: 'category1',
-          source: 'source1',
+          categories: [category1],
+          sources: [source1],
         );
         expect(result, equals([headline1]));
       });
@@ -494,7 +513,7 @@ void main() {
         );
         final headline1 = createHeadline(
           id: 'id1',
-          categories: [category1], // Pass Category object
+          category: category1, // Pass single Category object
           eventCountry: country1, // Pass Country object
           publishedAt: publishedAt,
         );
@@ -503,15 +522,16 @@ void main() {
         final mockQuery = MockQuery();
         final mockQuerySnap = MockQuerySnapshot();
         final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
-        // Use the ID from the Category object for the query map
-        final categoryMap = {'id': category1.id};
+        // Maps for whereIn should NOT contain 'id'
+        final categoryMapForQuery = category1.toJson()..remove('id');
+        final countryMapForQuery = country1.toJson()..remove('id');
 
         when(
-          () => mockCollection.where('categories', arrayContains: categoryMap),
+          () =>
+              mockCollection.where('category', whereIn: [categoryMapForQuery]),
         ).thenReturn(mockQuery);
         when(
-          // Use the parameter value passed below
-          () => mockQuery.where('eventCountry.iso_code', isEqualTo: 'country1'),
+          () => mockQuery.where('event_country', whereIn: [countryMapForQuery]),
         ).thenReturn(mockQuery);
         when(
           () => mockQuery.orderBy('publishedAt', descending: true),
@@ -520,12 +540,13 @@ void main() {
         when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
         when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
         when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
-        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id); // Mock ID
+        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id);
 
+        // Call with lists
         final result = await headlinesFirestore.getHeadlines(
           limit: 2,
-          category: 'category1',
-          eventCountry: 'country1',
+          categories: [category1],
+          eventCountries: [country1],
         );
         expect(result, equals([headline1]));
       });
@@ -551,14 +572,15 @@ void main() {
         final mockQuery = MockQuery();
         final mockQuerySnap = MockQuerySnapshot();
         final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
+        // Maps for whereIn should NOT contain 'id'
+        final sourceMapForQuery = source1.toJson()..remove('id');
+        final countryMapForQuery = country1.toJson()..remove('id');
 
         when(
-          // Use the ID from the Source object
-          () => mockCollection.where('source.id', isEqualTo: source1.id),
+          () => mockCollection.where('source', whereIn: [sourceMapForQuery]),
         ).thenReturn(mockQuery);
         when(
-          // Use the parameter value passed below
-          () => mockQuery.where('eventCountry.iso_code', isEqualTo: 'country1'),
+          () => mockQuery.where('event_country', whereIn: [countryMapForQuery]),
         ).thenReturn(mockQuery);
         when(
           () => mockQuery.orderBy('publishedAt', descending: true),
@@ -567,12 +589,13 @@ void main() {
         when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
         when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
         when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
-        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id); // Mock ID
+        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id);
 
+        // Call with lists
         final result = await headlinesFirestore.getHeadlines(
           limit: 2,
-          source: 'source1',
-          eventCountry: 'country1',
+          sources: [source1],
+          eventCountries: [country1],
         );
         expect(result, equals([headline1]));
       });
@@ -592,7 +615,7 @@ void main() {
           );
           final headline1 = createHeadline(
             id: 'id1',
-            categories: [category1], // Pass Category object
+            category: category1, // Pass single Category object
             source: source1, // Pass Source object
             eventCountry: country1, // Pass Country object
             publishedAt: publishedAt,
@@ -602,21 +625,23 @@ void main() {
           final mockQuery = MockQuery();
           final mockQuerySnap = MockQuerySnapshot();
           final mockQueryDocSnap1 = MockQueryDocumentSnapshot();
-          // Use the ID from the Category object for the query map
-          final categoryMap = {'id': category1.id};
+          // Maps for whereIn should NOT contain 'id'
+          final categoryMapForQuery = category1.toJson()..remove('id');
+          final sourceMapForQuery = source1.toJson()..remove('id');
+          final countryMapForQuery = country1.toJson()..remove('id');
 
           when(
-            () =>
-                mockCollection.where('categories', arrayContains: categoryMap),
+            () => mockCollection.where(
+              'category',
+              whereIn: [categoryMapForQuery],
+            ),
           ).thenReturn(mockQuery);
           when(
-            // Use the ID from the Source object
-            () => mockQuery.where('source.id', isEqualTo: source1.id),
+            () => mockQuery.where('source', whereIn: [sourceMapForQuery]),
           ).thenReturn(mockQuery);
           when(
-            // Use the parameter value passed below
             () =>
-                mockQuery.where('eventCountry.iso_code', isEqualTo: 'country1'),
+                mockQuery.where('event_country', whereIn: [countryMapForQuery]),
           ).thenReturn(mockQuery);
           when(
             () => mockQuery.orderBy('publishedAt', descending: true),
@@ -625,13 +650,14 @@ void main() {
           when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
           when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
           when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
-          when(() => mockQueryDocSnap1.id).thenReturn(headline1.id); // Mock ID
+          when(() => mockQueryDocSnap1.id).thenReturn(headline1.id);
 
+          // Call with lists
           final result = await headlinesFirestore.getHeadlines(
             limit: 2,
-            category: 'category1',
-            source: 'source1',
-            eventCountry: 'country1',
+            categories: [category1],
+            sources: [source1],
+            eventCountries: [country1],
           );
           expect(result, equals([headline1]));
         },
@@ -670,9 +696,9 @@ void main() {
           () => mockQuerySnap.docs,
         ).thenReturn([mockQueryDocSnap2]); // Only headline2 should be returned
         when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
-        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id); // Mock ID
+        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id);
         when(mockQueryDocSnap2.data).thenReturn(firestoreData2);
-        when(() => mockQueryDocSnap2.id).thenReturn(headline2.id); // Mock ID
+        when(() => mockQueryDocSnap2.id).thenReturn(headline2.id);
 
         final result = await headlinesFirestore.getHeadlines(
           limit: 2,
@@ -688,12 +714,12 @@ void main() {
         final category1 = Category(id: 'category1', name: 'Category 1');
         final headline1 = createHeadline(
           id: 'id1',
-          categories: [category1], // Pass Category object
+          category: category1, // Pass single Category object
           publishedAt: publishedAt1,
         );
         final headline2 = createHeadline(
           id: 'id2',
-          categories: [category1], // Pass Category object
+          category: category1, // Pass single Category object
           publishedAt: publishedAt2,
         );
         final firestoreData1 = createMockFirestoreData(headline1);
@@ -705,11 +731,12 @@ void main() {
         final mockQueryDocSnap2 = MockQueryDocumentSnapshot();
         final mockDocRef = MockDocumentReference();
         final mockDocSnap = MockDocumentSnapshot();
-        // Use the ID from the Category object for the query map
-        final categoryMap = {'id': category1.id};
+        // Map for whereIn should NOT contain 'id'
+        final categoryMapForQuery = category1.toJson()..remove('id');
 
         when(
-          () => mockCollection.where('categories', arrayContains: categoryMap),
+          () =>
+              mockCollection.where('category', whereIn: [categoryMapForQuery]),
         ).thenReturn(mockQuery);
         when(
           () => mockQuery.orderBy('publishedAt', descending: true),
@@ -728,14 +755,15 @@ void main() {
           () => mockQuerySnap.docs,
         ).thenReturn([mockQueryDocSnap2]); // Only headline2 should be returned
         when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
-        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id); // Mock ID
+        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id);
         when(mockQueryDocSnap2.data).thenReturn(firestoreData2);
-        when(() => mockQueryDocSnap2.id).thenReturn(headline2.id); // Mock ID
+        when(() => mockQueryDocSnap2.id).thenReturn(headline2.id);
 
+        // Call with list
         final result = await headlinesFirestore.getHeadlines(
           limit: 2,
           startAfterId: 'id1',
-          category: 'category1',
+          categories: [category1],
         );
         expect(result, equals([headline2]));
       });
@@ -783,16 +811,20 @@ void main() {
             isLessThanOrEqualTo: 'Search Query\uf8ff',
           ),
         ).thenReturn(mockQuery);
-        // Add mocking for the new orderBy('title')
-        when(() => mockQuery.orderBy('title')).thenReturn(mockQuery);
         when(
-          () => mockQuery.orderBy('publishedAt', descending: true),
+          () => mockQuery.orderBy('title'),
+        ).thenReturn(mockQuery); // Required for range filter
+        when(
+          () => mockQuery.orderBy(
+            'publishedAt',
+            descending: true,
+          ), // Secondary sort
         ).thenReturn(mockQuery);
         when(() => mockQuery.limit(any())).thenReturn(mockQuery);
         when(mockQuery.get).thenAnswer((_) async => mockQuerySnap);
         when(() => mockQuerySnap.docs).thenReturn([mockQueryDocSnap1]);
         when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
-        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id); // Mock ID
+        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id);
 
         final result = await headlinesFirestore.searchHeadlines(
           query: 'Search Query',
@@ -863,10 +895,14 @@ void main() {
             isLessThanOrEqualTo: 'Search Query\uf8ff',
           ),
         ).thenReturn(mockQuery);
-        // Add mocking for the new orderBy('title')
-        when(() => mockQuery.orderBy('title')).thenReturn(mockQuery);
         when(
-          () => mockQuery.orderBy('publishedAt', descending: true),
+          () => mockQuery.orderBy('title'),
+        ).thenReturn(mockQuery); // Required for range filter
+        when(
+          () => mockQuery.orderBy(
+            'publishedAt',
+            descending: true,
+          ), // Secondary sort
         ).thenReturn(mockQuery);
         when(() => mockQuery.limit(any())).thenReturn(mockQuery);
         when(() => mockCollection.doc('id1')).thenReturn(mockDocRef);
@@ -880,9 +916,9 @@ void main() {
           () => mockQuerySnap.docs,
         ).thenReturn([mockQueryDocSnap2]); // Only headline2 should be returned
         when(mockQueryDocSnap1.data).thenReturn(firestoreData1);
-        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id); // Mock ID
+        when(() => mockQueryDocSnap1.id).thenReturn(headline1.id);
         when(mockQueryDocSnap2.data).thenReturn(firestoreData2);
-        when(() => mockQueryDocSnap2.id).thenReturn(headline2.id); // Mock ID
+        when(() => mockQueryDocSnap2.id).thenReturn(headline2.id);
 
         final result = await headlinesFirestore.searchHeadlines(
           query: 'Search Query',
@@ -907,7 +943,7 @@ void main() {
         when(mockDocRef.get).thenAnswer((_) async => mockDocSnap);
         when(() => mockDocSnap.exists).thenReturn(true);
         when(mockDocSnap.data).thenReturn(createMockFirestoreData(headline));
-        when(() => mockDocSnap.id).thenReturn(headline.id); // Mock ID
+        when(() => mockDocSnap.id).thenReturn(headline.id);
 
         // Mock createHeadline
         when(() => mockDocRef.set(any())).thenAnswer((_) async {});
@@ -943,7 +979,7 @@ void main() {
         when(
           mockDocSnap.data,
         ).thenReturn(createMockFirestoreData(updatedHeadline));
-        when(() => mockDocSnap.id).thenReturn(headline.id); // Mock ID
+        when(() => mockDocSnap.id).thenReturn(headline.id);
 
         // Mock updateHeadline
         when(() => mockDocRef.update(any())).thenAnswer((_) async {});
