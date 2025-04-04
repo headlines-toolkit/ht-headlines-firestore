@@ -10,21 +10,21 @@ dependencies:
   cloud_firestore: ^5.6.5
   flutter:
     sdk: flutter
-  ht_headlines_client:
-    git:
-      url: https://github.com/headlines-toolkit/ht-headlines-client.git
-      
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
   ht_categories_client:
     git:
       url: https://github.com/headlines-toolkit/ht-categories-client.git
   ht_countries_client:
     git:
       url: https://github.com/headlines-toolkit/ht-countries-client.git
+  ht_headlines_client:
+    git:
+      url: https://github.com/headlines-toolkit/ht-headlines-client.git
   ht_sources_client:
     git:
       url: https://github.com/headlines-toolkit/ht-sources-client.git
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
   mocktail: ^1.0.4
   very_good_analysis: ^7.0.0
